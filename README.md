@@ -15,15 +15,15 @@ Built using modern **Jetpack Compose** and **Kotlin Coroutines**, TalkToMe integ
 
 ---
 
-## ✨ The Magic: Regional Language to English
-TalkToMe breaks down language barriers. You can speak naturally in regional languages (like Telugu or Hindi), and the powerful AI engine will flawlessly translate the *meaning* into perfect English before typing it into your chat.
+## ✨ The Magic: Transliteration (Telugu Voice to English Letters)
+TalkToMe breaks down typing barriers for regional languages. You can speak naturally in Telugu (or Hindi), and the powerful Sarvam AI engine will flawlessly **transliterate** your words. This means it types the exact words you spoke, but using the English alphabet!
 
-| 🗣️ You Speak (Telugu Voice) | 🧠 What it Means | ✍️ What TalkToMe Types (English) |
-| :--- | :--- | :--- |
-| *"Nenu 5 nimishallo akkada untanu"* | I will be there in 5 minutes | **I will be there in 5 minutes.** |
-| *"Repu morning meeting unda?"* | Is there a meeting tomorrow morning? | **Is there a meeting tomorrow morning?** |
-| *"Bhojanam chesava?"* | Did you have your lunch/dinner? | **Have you eaten?** |
-| *"Naku koncham pani undi, tarwata call chesta"* | I have some work, I will call later | **I have some work, I'll call you later.** |
+| 🗣️ You Speak (Telugu Voice) | ✍️ What TalkToMe Types (English Letters) |
+| :--- | :--- |
+| *"Nenu 5 nimishallo akkada untanu"* | **Nenu 5 nimishallo akkada untanu** |
+| *"Repu morning meeting unda?"* | **Repu morning meeting unda?** |
+| *"Bhojanam chesava?"* | **Bhojanam chesava?** |
+| *"Naku koncham pani undi, tarwata call chesta"* | **Naku koncham pani undi, tarwata call chesta** |
 
 ---
 
@@ -33,9 +33,9 @@ TalkToMe is designed to be completely invisible until you need to type something
 **Example Workflow:**
 1. **Open an App:** You open WhatsApp (or Telegram, Chrome, etc.) and tap on the text box.
 2. **Keyboard Appears:** Your standard Android keyboard (like Gboard) slides up. TalkToMe detects the keyboard and magically reveals a small floating microphone bubble on the edge of your screen.
-3. **Record:** You tap the bubble and speak (e.g., in Hindi: *"Main 5 minute mein pahunch raha hoon"*). The bubble pulses to show it is listening.
-4. **Process:** Tap the stop button. A loading spinner appears while Sarvam AI processes and translates your voice in real-time.
-5. **Confirm & Inject:** The bubble expands to show `[ ✔ ]` and `[ X ]`. When you tap `✔`, the English translation (*"I am reaching in 5 minutes"*) is instantly typed into the WhatsApp text box without you touching the keyboard!
+3. **Record:** You tap the bubble and speak (e.g., *"Bhojanam chesava?"*). The bubble pulses to show it is listening.
+4. **Process:** Tap the stop button. A loading spinner appears while Sarvam AI processes and transliterates your voice in real-time.
+5. **Confirm & Inject:** The bubble expands to show `[ ✔ ]` and `[ X ]`. When you tap `✔`, the transliterated text (*"Bhojanam chesava?"*) is instantly typed into the WhatsApp text box without you touching the keyboard!
 6. **Vanish:** You press the back button or send the message, the keyboard disappears, and the floating bubble instantly vanishes out of your way.
 
 ---
