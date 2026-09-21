@@ -15,6 +15,18 @@ Built using modern **Jetpack Compose** and **Kotlin Coroutines**, TalkToMe integ
 
 ---
 
+## 💡 How to Use the App (Example Workflow)
+TalkToMe is designed to be completely invisible until you need to type something. 
+
+**Example Workflow:**
+1. **Open an App:** You open WhatsApp (or Telegram, Chrome, etc.) and tap on the text box.
+2. **Keyboard Appears:** Your standard Android keyboard (like Gboard) slides up. TalkToMe detects the keyboard and magically reveals a small floating microphone bubble on the edge of your screen.
+3. **Record:** You tap the bubble and speak (e.g., in Hindi: *"Main 5 minute mein pahunch raha hoon"*). The bubble pulses to show it is listening.
+4. **Process:** Tap the stop button. A loading spinner appears while Sarvam AI processes and translates your voice in real-time.
+5. **Confirm & Inject:** The bubble expands to show `[ ✔ ]` and `[ X ]`. When you tap `✔`, the English translation (*"I am reaching in 5 minutes"*) is instantly typed into the WhatsApp text box without you touching the keyboard!
+6. **Vanish:** You press the back button or send the message, the keyboard disappears, and the floating bubble instantly vanishes out of your way.
+
+---
 ## 🛠️ How it Works (Under the Hood)
 1. **Accessibility Observer:** `TalkToMeAccessibilityService` constantly monitors the screen state. When it detects a window of type `TYPE_INPUT_METHOD` (the keyboard), it broadcasts an event via a Kotlin `StateFlow`.
 2. **Floating Window Manager:** `BubbleService` (a Foreground Service) observes this state. When true, it uses Jetpack Compose inside a `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY` to draw the floating UI.
