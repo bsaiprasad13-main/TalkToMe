@@ -15,6 +15,18 @@ Built using modern **Jetpack Compose** and **Kotlin Coroutines**, TalkToMe integ
 
 ---
 
+## ✨ The Magic: Regional Language to English
+TalkToMe breaks down language barriers. You can speak naturally in regional languages (like Telugu or Hindi), and the powerful AI engine will flawlessly translate the *meaning* into perfect English before typing it into your chat.
+
+| 🗣️ You Speak (Telugu Voice) | 🧠 What it Means | ✍️ What TalkToMe Types (English) |
+| :--- | :--- | :--- |
+| *"Nenu 5 nimishallo akkada untanu"* | I will be there in 5 minutes | **I will be there in 5 minutes.** |
+| *"Repu morning meeting unda?"* | Is there a meeting tomorrow morning? | **Is there a meeting tomorrow morning?** |
+| *"Bhojanam chesava?"* | Did you have your lunch/dinner? | **Have you eaten?** |
+| *"Naku koncham pani undi, tarwata call chesta"* | I have some work, I will call later | **I have some work, I'll call you later.** |
+
+---
+
 ## 💡 How to Use the App (Example Workflow)
 TalkToMe is designed to be completely invisible until you need to type something. 
 
