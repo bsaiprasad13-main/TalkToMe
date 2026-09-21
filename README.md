@@ -15,15 +15,23 @@ Built using modern **Jetpack Compose** and **Kotlin Coroutines**, TalkToMe integ
 
 ---
 
-## ✨ The Magic: Transliteration (Telugu Voice to English Letters)
-TalkToMe breaks down typing barriers for regional languages. You can speak naturally in Telugu (or Hindi), and the powerful Sarvam AI engine will flawlessly **transliterate** your words. This means it types the exact words you spoke, but using the English alphabet!
+## ✨ The Magic: Transliteration (Telugu Audio to Roman Script)
+TalkToMe breaks down typing barriers for regional languages. By leveraging Sarvam AI's `translit` mode, it performs direct script conversion from spoken Telugu into casual English letters.
 
-| 🗣️ You Speak (Telugu Voice) | ✍️ What TalkToMe Types (English Letters) |
+| You speak (Telugu audio) | App types into WhatsApp (Roman script) |
 | :--- | :--- |
-| *"Nenu 5 nimishallo akkada untanu"* | **Nenu 5 nimishallo akkada untanu** |
-| *"Repu morning meeting unda?"* | **Repu morning meeting unda?** |
-| *"Bhojanam chesava?"* | **Bhojanam chesava?** |
-| *"Naku koncham pani undi, tarwata call chesta"* | **Naku koncham pani undi, tarwata call chesta** |
+| ఏం చేస్తున్నావ్? | em chesthunnav? |
+| ఎక్కడ ఉన్నావ్? | ekkada unnav? |
+| తిన్నావా? | thinnava? |
+| నాకు ఆకలిగా ఉంది | naaku aakaliga undi |
+| రేపు కలుద్దామా? | repu kaluddama? |
+| నువ్వు ఇంటికి ఎప్పుడు వస్తున్నావ్? | nuvvu intiki eppudu vastunnav? |
+| సరే, తర్వాత మాట్లాడదాం | sare, tarvatha matladdam |
+| నాకు ఇది అస్సలు నచ్చలేదు | naaku idi assalu nachaledu |
+
+So it's not translating meaning into English (*"what are you doing?"*) — it's keeping the Telugu words, Telugu grammar, Telugu sentence structure, just written with English letters, the way you and your friends already text casually. Same slang, same colloquial contractions (like *"chesthunnav"* not the formal *"cheyuchunnavu"*), exactly how you'd naturally type it by hand if you weren't in a hurry.
+
+That's the target output the Sarvam `translit` mode is meant to produce directly from your spoken Telugu — no separate translation step, no meaning-conversion, just script conversion.
 
 ---
 
