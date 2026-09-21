@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">TalkToMe</string>
+    <string name="accessibility_service_description">TalkToMe uses this service to automatically type translated text into your currently active app.</string>
+</resources>

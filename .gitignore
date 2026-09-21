@@ -1,0 +1,35 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+P M _ I n t e r v i e w _ P r e p . m d  
+ 
+FLOATING_BUBBLE_ARCHITECTURE.md  
+ 
+# Android Artifacts
+*.apk
+*.ap_
+*.aab
+
+# IntelliJ / Android Studio
+*.iml
+.idea/
+.gradle/
+
+# Keystores
+*.jks
+*.keystore
+
+# Mac OS
+.DS_Store
