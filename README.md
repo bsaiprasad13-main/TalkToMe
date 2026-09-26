@@ -6,6 +6,46 @@ Built using modern **Jetpack Compose** and **Kotlin Coroutines**, TalkToMe integ
 
 ---
 
+## 🎯 What Problem Does It Solve?
+
+Imagine you are chatting on WhatsApp and want to send a message in your native language (like Telugu, Hindi, etc.), but you want to type it casually using English letters. Typing this out manually takes time and effort. 
+
+**TalkToMe solves this by letting you just speak naturally.** Without ever leaving your current screen, it listens to your voice and instantly types out the words in English letters right into your text box.
+
+**Why existing options fall short:**
+Standard tools like built-in keyboard dictation (e.g., Gboard or Apple Keyboard) or translation apps miss the mark. They either force you to output text in the actual native script (which can be clunky to read), or they fully translate the meaning to English (changing your words entirely to "Where are you?"). They completely fail at *transliteration*—letting you speak your regional dialect and outputting those exact words in casual English letters.
+
+**What about Wispr Flow?**
+While TalkToMe is heavily inspired by Wispr Flow's amazing UX, even Wispr Flow leaves a gap here. Wispr Flow currently has a dedicated "Hinglish" setting that romanizes Hindi perfectly. However, for Telugu (and most other Indian languages), a romanized-output option simply doesn't exist yet in their app. Wispr Flow works great for Hindi speakers, but TalkToMe fills this massive gap by offering perfect "Tenglish" (and similar) transliteration for the rest of the regional languages!
+
+**Simple Example:**
+You are in WhatsApp and want to say *"Where are you?"* in Telugu. 
+Instead of awkwardly typing it out on your keyboard:
+1. You just tap the floating mic and speak: **"ఎక్కడ ఉన్నావ్?"**
+2. The app instantly types: **"ekkada unnav?"** directly into your WhatsApp chat!
+
+It doesn't translate the meaning into English; it keeps your natural slang, grammar, and exact words, but writes them exactly the way you casually text with your friends.
+
+## 🤝 How TalkToMe relates to Kivi (Sarvam AI)
+
+TalkToMe is built on Sarvam AI's Saaras v4 speech model, the same underlying model family that powers **Kivi**, Sarvam's own voice application (built in partnership with HP, announced at Sarvam Epoch). Both projects share the same foundation: Sarvam's speech recognition stack for Indian languages, including transliterated (romanized) output.
+
+Where they differ is platform, scope, and specific use case:
+
+| | TalkToMe | Kivi |
+| :--- | :--- | :--- |
+| **Platform** | Android (mobile) | Mac and windows only, (Android, API, and MCP access announced as "next") |
+| **Interaction model** | Floating mic bubble that overlays any app | Voice interface across desktop apps |
+| **Primary output** | Romanized text (Tenglish-style), typed directly into the focused text field | Broader: dictation, drafting, rewriting, search, and task assistance |
+| **Scope** | Narrow and specific: fast, romanized voice-to-text for chat apps like WhatsApp | Broad: voice as a general interface across Docs, spreadsheets, code, and more |
+| **Built by** | Personal project, using Sarvam's public API | Sarvam AI's own first-party product |
+
+In short: **Kivi** is Sarvam's platform-level bet on voice as the primary way people interact with a computer. **TalkToMe** is a focused, single-purpose tool solving one specific gap: fast, romanized-script voice typing for Indian-language chat, on Android, where Sarvam's own product isn't available yet.
+
+TalkToMe isn't a competing product to Kivi. It's a small, personal solution to a problem I feel every day, built on the same underlying technology Sarvam is using to solve a much bigger one.
+
+---
+
 ## 🚀 Features
 - **Context-Aware Floating UI (Wispr Flow Clone):** The microphone bubble is completely invisible until you actually need it. The app monitors the Android Window Manager and instantly reveals the floating mic only when a Soft Keyboard is actively on screen.
 - **Smart Audio Encoding:** Bypasses Android's standard compressed formats to capture raw 16-bit PCM audio, manually constructing a standard `.wav` header. This ensures strict API compliance with backend AI systems (like Sarvam).
