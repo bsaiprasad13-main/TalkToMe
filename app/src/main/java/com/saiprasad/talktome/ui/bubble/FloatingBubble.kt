@@ -44,7 +44,9 @@ fun FloatingBubble(
     val coroutineScope = rememberCoroutineScope()
     var isRecording by remember { mutableStateOf(false) }
     var isTranslating by remember { mutableStateOf(false) }
-    val isVisible by FocusEventBus.isEditableFocused.collectAsState()
+    val isFocused by FocusEventBus.isEditableFocused.collectAsState()
+    val isEnabled by FocusEventBus.isBubbleEnabled.collectAsState()
+    val isVisible = isFocused && isEnabled
     
     val screenWidth = LocalContext.current.resources.displayMetrics.widthPixels
     

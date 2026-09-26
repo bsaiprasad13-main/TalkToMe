@@ -43,6 +43,9 @@ class BubbleService : Service(), SavedStateRegistryOwner {
         audioRecorder = TalkToMeAudioRecorder(this)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         
+        val settingsRepo = com.saiprasad.talktome.data.SettingsRepository(this)
+        com.saiprasad.talktome.service.FocusEventBus.updateBubbleEnabled(settingsRepo.isBubbleEnabled)
+        
         startForegroundService()
         showFloatingBubble()
         

@@ -53,14 +53,36 @@ class TalkToMeAccessibilityService : AccessibilityService() {
         
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                 val keyboardVisible = isKeyboardVisible()
+                val editableFocused = isEditableFocused()
                 
-                // Show the bubble only if the keyboard is explicitly visible
-                FocusEventBus.updateFocusState(keyboardVisible)
+                // Show the bubble only if the keyboard is explicitly visible or an editable node is focused
+                FocusEventBus.updateFocusState(keyboardVisible || editableFocused)
             }
         }
+    }
+
+    private fun isEditableFocused(): Boolean {
+        val rootNode = rootInActiveWindow ?: return false
+        val focusedNode = findFocusedNode(rootNode)
+        val isEditable = focusedNode?.isEditable == true
+        focusedNode?.recycle()
+        rootNode.recycle()
+        return isEditable
+    }
+
+    private fun findFocusedNode(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.isFocused) return node
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = findFocusedNode(child)
+            if (found != null) return found
+            child.recycle()
+        }
+        return null
     }
 
     override fun onInterrupt() {

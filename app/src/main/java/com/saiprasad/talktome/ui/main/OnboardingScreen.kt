@@ -54,6 +54,28 @@ fun OnboardingScreen() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (audioGranted && overlayGranted && accessibilityGranted) {
+            val settingsRepo = remember { com.saiprasad.talktome.data.SettingsRepository(context) }
+            var isBubbleEnabled by remember { mutableStateOf(settingsRepo.isBubbleEnabled) }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Floating Bubble",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Switch(
+                    checked = isBubbleEnabled,
+                    onCheckedChange = { checked ->
+                        isBubbleEnabled = checked
+                        settingsRepo.isBubbleEnabled = checked
+                        com.saiprasad.talktome.service.FocusEventBus.updateBubbleEnabled(checked)
+                    }
+                )
+            }
+
             Text(
                 "TalkToMe History",
                 style = MaterialTheme.typography.headlineMedium,
