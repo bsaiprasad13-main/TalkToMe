@@ -33,8 +33,9 @@ object SarvamApiClient {
     private const val BASE_URL = "https://api.sarvam.ai/"
 
     val instance: SarvamApi by lazy {
+        // BODY would dump the whole audio upload into logcat; BASIC is enough to debug.
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
 
         val client = OkHttpClient.Builder()
