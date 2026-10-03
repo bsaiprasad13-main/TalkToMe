@@ -47,9 +47,9 @@ TalkToMe isn't a competing product to Kivi. It's a small, personal solution to a
 ---
 
 ## 🚀 Features
-- **Context-Aware Floating UI (Wispr Flow Clone):** The microphone bubble is completely invisible until you actually need it. The app monitors the Android Window Manager and instantly reveals the floating mic only when a Soft Keyboard is actively on screen.
+- **Context-Aware Floating UI (Wispr Flow Clone):** The microphone bubble is completely invisible until you actually need it. It appears docked to the screen edge just above the keyboard the moment a soft keyboard opens, and hides when it closes. Like Wispr Flow, it stays out of password, PIN, number and phone fields, and remembers the edge and height you drag it to.
 - **Smart Audio Encoding:** Bypasses Android's standard compressed formats to capture raw 16-bit PCM audio, manually constructing a standard `.wav` header. This ensures strict API compliance with backend AI systems (like Sarvam).
-- **Accessibility Text Injection:** Uses Android's `AccessibilityService` to intelligently find the currently focused `EditText` and programmatically inject the translated text, entirely replacing the need to manually type. If it can't find the field, it safely falls back to your clipboard.
+- **Accessibility Text Injection:** Uses Android's `AccessibilityService` to find the focused text field and insert the text at your cursor, keeping anything you already typed. If a field doesn't support that it pastes instead, and if there is no field at all the text is copied to your clipboard so it's never lost.
 - **Micro-interactions & UX:** Features an animated pulsing wave while recording, a smooth horizontal expansion to reveal Accept/Reject buttons, and a loading spinner for instant network feedback.
 - **Local History Vault:** Offline-first architecture saves your last 10 successful transcriptions locally using `SharedPreferences`, accessible via the sleek Home Screen.
 
@@ -88,10 +88,10 @@ TalkToMe is designed to be completely invisible until you need to type something
 
 ---
 ## 🛠️ How it Works (Under the Hood)
-1. **Accessibility Observer:** `TalkToMeAccessibilityService` constantly monitors the screen state. When it detects a window of type `TYPE_INPUT_METHOD` (the keyboard), it broadcasts an event via a Kotlin `StateFlow`.
-2. **Floating Window Manager:** `BubbleService` (a Foreground Service) observes this state. When true, it uses Jetpack Compose inside a `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY` to draw the floating UI.
-3. **Custom Audio Pipeline:** When you tap the mic, a custom `AudioRecord` implementation streams raw microphone data to a temporary file, bypassing the standard `MediaRecorder`. When stopped, it prepends a 44-byte WAVE header to create a pure `.wav` file.
-4. **Network & Injection:** The app sends the `.wav` to Sarvam's API using `Retrofit` and `OkHttp`. Upon success, the translated text is sent back to the `AccessibilityService`, which uses `ACTION_SET_TEXT` or `ACTION_PASTE` to forcefully inject it into the active text box.
+1. **Keyboard detection:** `TalkToMeAccessibilityService` listens for `TYPE_WINDOWS_CHANGED` (sent when the keyboard window appears or disappears) plus focus events, and checks for a window of type `TYPE_INPUT_METHOD` to get the keyboard's position.
+2. **Floating bubble:** The accessibility service draws the bubble itself (`BubbleOverlay`) as a `TYPE_ACCESSIBILITY_OVERLAY` window rendered with Jetpack Compose. That window sits above the keyboard, needs no "Display over other apps" permission, and lives exactly as long as the accessibility service, so there is no separate background service for Android to kill.
+3. **Custom Audio Pipeline:** When you tap the mic, a custom `AudioRecord` implementation streams raw 16 kHz PCM to a temporary file and adds a 44-byte WAVE header when you stop. A short-lived `RecordingService` shows a "Listening…" notification only while you dictate.
+4. **Network & Injection:** The `.wav` goes to Sarvam's API via `Retrofit`/`OkHttp`. The transcript is inserted at the cursor with `ACTION_SET_TEXT` (falling back to `ACTION_PASTE`, then the clipboard).
 
 ---
 
@@ -117,8 +117,11 @@ To install this on your personal Android device, you'll need a computer and a US
 6. Click the green **Play/Run** button (Shift + F10).
 7. The app will install on your phone. When prompted, you MUST grant the app:
    - Microphone Permission
-   - Display Over Other Apps Permission
-   - Accessibility Service Permission
+   - Accessibility Service Permission (turn on "Use TalkToMe", leave the shortcut toggle off)
+
+   Recommended: tap **Allow** on the "Keep TalkToMe running" card to give it unrestricted battery use (on Xiaomi/Oppo/Vivo also enable Autostart).
+
+   If the Accessibility toggle is greyed out with "Restricted setting" (Android 13+ when the APK is sideloaded), open **App info → ⋮ → Allow restricted settings**, then turn it on.
 
 ### 🤖 Troubleshooting with AI IDEs
 Deploying Android apps can sometimes result in environment issues (like Gradle version mismatches, Java SDK errors, or manifest conflicts). 

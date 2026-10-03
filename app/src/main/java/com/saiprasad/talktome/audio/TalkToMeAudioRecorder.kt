@@ -1,200 +1,211 @@
 package com.saiprasad.talktome.audio
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 
+/**
+ * Records 16 kHz mono 16-bit PCM straight into a .wav file in the cache dir.
+ *
+ * A background writer owns the [AudioRecord] while recording; [stop] waits for that writer to
+ * finish before stopping/releasing the recorder, so the file is never truncated and the native
+ * recorder is never released mid-read.
+ */
 class TalkToMeAudioRecorder(private val context: Context) {
     private var audioRecord: AudioRecord? = null
     private var outputFile: File? = null
-    private var timeoutJob: Job? = null
-    private var recordingJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.Main)
-    
-    var isRecording: Boolean = false
-        private set
+    private var writerJob: Job? = null
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val sampleRate = 16000
-    private val channelConfig = AudioFormat.CHANNEL_IN_MONO
-    private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+    @Volatile private var keepWriting = false
 
-    /**
-     * Starts recording audio. 
-     * If recording runs for 30s, it automatically stops and invokes onTimeout.
-     */
+    val isRecording: Boolean
+        get() = audioRecord != null
+
+    /** Starts recording. Returns false if the mic is unavailable (no permission, busy, etc.). */
     @SuppressLint("MissingPermission")
-    fun startRecording(onTimeout: (File?) -> Unit) {
-        if (isRecording) return
+    fun start(): Boolean {
+        if (audioRecord != null) return true
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "RECORD_AUDIO permission not granted")
+            return false
+        }
 
-        outputFile = File(context.cacheDir, "talktome_audio_${System.currentTimeMillis()}.wav")
-        
-        try {
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
-            )
+        val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+        if (minBufferSize <= 0) {
+            Log.e(TAG, "Invalid min buffer size: $minBufferSize")
+            return false
+        }
+        val bufferSize = minBufferSize * 2
 
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e("TalkToMeAudio", "AudioRecord initialization failed")
-                return
-            }
-
-            audioRecord?.startRecording()
-            isRecording = true
-            Log.d("TalkToMeAudio", "Recording started: ${outputFile?.absolutePath}")
-
-            // Write PCM data to file in background
-            recordingJob = CoroutineScope(Dispatchers.IO).launch {
-                writeAudioDataToFile(outputFile!!)
-            }
-
-            // Start 30 second safety timeout
-            timeoutJob = scope.launch {
-                delay(30_000)
-                if (isRecording) {
-                    Log.d("TalkToMeAudio", "Safety timeout hit. Stopping recording.")
-                    val file = stopRecording()
-                    onTimeout(file)
-                }
-            }
+        val record = try {
+            AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
         } catch (e: Exception) {
-            Log.e("TalkToMeAudio", "Failed to start recording", e)
-            isRecording = false
-            audioRecord?.release()
-            audioRecord = null
+            Log.e(TAG, "Failed to create AudioRecord", e)
+            return false
+        }
+
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            Log.e(TAG, "AudioRecord initialization failed")
+            record.release()
+            return false
+        }
+
+        try {
+            record.startRecording()
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "startRecording failed", e)
+            record.release()
+            return false
+        }
+
+        // Another app (e.g. a phone call) holding the mic leaves us in the STOPPED state.
+        if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+            Log.e(TAG, "Microphone is busy")
+            record.release()
+            return false
+        }
+
+        val file = File(context.cacheDir, "talktome_audio_${System.currentTimeMillis()}.wav")
+        audioRecord = record
+        outputFile = file
+        keepWriting = true
+        writerJob = ioScope.launch { writePcm(record, file, bufferSize) }
+        Log.d(TAG, "Recording started: ${file.absolutePath}")
+        return true
+    }
+
+    /** Stops recording and returns the finished .wav file, or null if nothing usable was captured. */
+    suspend fun stop(): File? {
+        val record = audioRecord ?: return null
+        val file = outputFile
+        val writer = writerJob
+        audioRecord = null
+        outputFile = null
+        writerJob = null
+        keepWriting = false
+
+        return withContext(Dispatchers.IO) {
+            writer?.join()
+            try {
+                record.stop()
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "AudioRecord.stop failed", e)
+            }
+            record.release()
+
+            if (file == null || !file.exists() || file.length() <= WAV_HEADER_SIZE) {
+                file?.delete()
+                null
+            } else {
+                writeWavHeader(file)
+                Log.d(TAG, "Recording stopped: ${file.length()} bytes")
+                file
+            }
         }
     }
 
-    private fun writeAudioDataToFile(file: File) {
-        val data = ByteArray(bufferSize)
-        var os: FileOutputStream? = null
+    /** Stops and discards the current recording. */
+    suspend fun cancel() {
+        stop()?.delete()
+    }
 
+    /** Fire-and-forget cleanup for when the owning service is torn down. */
+    fun release() {
+        if (audioRecord == null) return
+        ioScope.launch { cancel() }
+    }
+
+    private fun writePcm(record: AudioRecord, file: File, bufferSize: Int) {
+        val buffer = ByteArray(bufferSize)
         try {
-            os = FileOutputStream(file)
-            // Leave 44 bytes for the WAV header
-            val emptyHeader = ByteArray(44)
-            os.write(emptyHeader)
-
-            while (isRecording) {
-                val read = audioRecord?.read(data, 0, bufferSize) ?: 0
-                if (read > 0) {
-                    os.write(data, 0, read)
+            FileOutputStream(file).use { out ->
+                // Placeholder for the WAV header, filled in once the length is known.
+                out.write(ByteArray(WAV_HEADER_SIZE.toInt()))
+                while (keepWriting) {
+                    val read = record.read(buffer, 0, buffer.size)
+                    if (read > 0) {
+                        out.write(buffer, 0, read)
+                    } else if (read < 0) {
+                        Log.e(TAG, "AudioRecord.read error: $read")
+                        break
+                    }
                 }
             }
         } catch (e: Exception) {
-            Log.e("TalkToMeAudio", "Error writing audio data", e)
-        } finally {
-            os?.close()
+            Log.e(TAG, "Error writing audio data", e)
         }
     }
 
     private fun writeWavHeader(file: File) {
         try {
-            val randomAccessFile = RandomAccessFile(file, "rw")
-            val totalAudioLen = file.length() - 44
+            val totalAudioLen = file.length() - WAV_HEADER_SIZE
             val totalDataLen = totalAudioLen + 36
             val channels = 1
-            val byteRate = 16 * sampleRate * channels / 8
+            val bitsPerSample = 16
+            val byteRate = bitsPerSample * SAMPLE_RATE * channels / 8
+            val blockAlign = channels * bitsPerSample / 8
 
-            val header = ByteArray(44)
-            header[0] = 'R'.code.toByte() // RIFF/WAVE header
-            header[1] = 'I'.code.toByte()
-            header[2] = 'F'.code.toByte()
-            header[3] = 'F'.code.toByte()
-            header[4] = (totalDataLen and 0xff).toByte()
-            header[5] = ((totalDataLen shr 8) and 0xff).toByte()
-            header[6] = ((totalDataLen shr 16) and 0xff).toByte()
-            header[7] = ((totalDataLen shr 24) and 0xff).toByte()
-            header[8] = 'W'.code.toByte()
-            header[9] = 'A'.code.toByte()
-            header[10] = 'V'.code.toByte()
-            header[11] = 'E'.code.toByte()
-            header[12] = 'f'.code.toByte() // 'fmt ' chunk
-            header[13] = 'm'.code.toByte()
-            header[14] = 't'.code.toByte()
-            header[15] = ' '.code.toByte()
-            header[16] = 16 // 4 bytes: size of 'fmt ' chunk
-            header[17] = 0
-            header[18] = 0
-            header[19] = 0
-            header[20] = 1 // format = 1
-            header[21] = 0
-            header[22] = channels.toByte()
-            header[23] = 0
-            header[24] = (sampleRate and 0xff).toByte()
-            header[25] = ((sampleRate shr 8) and 0xff).toByte()
-            header[26] = ((sampleRate shr 16) and 0xff).toByte()
-            header[27] = ((sampleRate shr 24) and 0xff).toByte()
-            header[28] = (byteRate and 0xff).toByte()
-            header[29] = ((byteRate shr 8) and 0xff).toByte()
-            header[30] = ((byteRate shr 16) and 0xff).toByte()
-            header[31] = ((byteRate shr 24) and 0xff).toByte()
-            header[32] = (1 * 16 / 8).toByte() // block align
-            header[33] = 0
-            header[34] = 16 // bits per sample
-            header[35] = 0
-            header[36] = 'd'.code.toByte()
-            header[37] = 'a'.code.toByte()
-            header[38] = 't'.code.toByte()
-            header[39] = 'a'.code.toByte()
-            header[40] = (totalAudioLen and 0xff).toByte()
-            header[41] = ((totalAudioLen shr 8) and 0xff).toByte()
-            header[42] = ((totalAudioLen shr 16) and 0xff).toByte()
-            header[43] = ((totalAudioLen shr 24) and 0xff).toByte()
+            val header = ByteArray(WAV_HEADER_SIZE.toInt())
+            fun putAscii(offset: Int, value: String) = value.forEachIndexed { i, c -> header[offset + i] = c.code.toByte() }
+            fun putIntLE(offset: Int, value: Long) {
+                for (i in 0 until 4) header[offset + i] = ((value shr (8 * i)) and 0xff).toByte()
+            }
+            fun putShortLE(offset: Int, value: Int) {
+                header[offset] = (value and 0xff).toByte()
+                header[offset + 1] = ((value shr 8) and 0xff).toByte()
+            }
 
-            randomAccessFile.seek(0)
-            randomAccessFile.write(header, 0, 44)
-            randomAccessFile.close()
+            putAscii(0, "RIFF")
+            putIntLE(4, totalDataLen)
+            putAscii(8, "WAVE")
+            putAscii(12, "fmt ")
+            putIntLE(16, 16) // size of 'fmt ' chunk
+            putShortLE(20, 1) // PCM
+            putShortLE(22, channels)
+            putIntLE(24, SAMPLE_RATE.toLong())
+            putIntLE(28, byteRate.toLong())
+            putShortLE(32, blockAlign)
+            putShortLE(34, bitsPerSample)
+            putAscii(36, "data")
+            putIntLE(40, totalAudioLen)
+
+            RandomAccessFile(file, "rw").use { raf ->
+                raf.seek(0)
+                raf.write(header)
+            }
         } catch (e: Exception) {
-            Log.e("TalkToMeAudio", "Error writing WAV header", e)
+            Log.e(TAG, "Error writing WAV header", e)
         }
     }
 
-    /**
-     * Stops the active recording and returns the recorded audio file.
-     */
-    fun stopRecording(): File? {
-        if (!isRecording) return null
-        
-        isRecording = false // This will stop the write loop in writeAudioDataToFile
-        
-        timeoutJob?.cancel()
-        timeoutJob = null
+    companion object {
+        private const val TAG = "TalkToMeAudio"
+        private const val SAMPLE_RATE = 16000
+        private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+        private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+        private const val WAV_HEADER_SIZE = 44L
 
-        return try {
-            audioRecord?.stop()
-            audioRecord?.release()
-            
-            // Wait slightly for the IO coroutine to finish writing PCM
-            Thread.sleep(100)
-            
-            if (outputFile != null && outputFile!!.exists()) {
-                writeWavHeader(outputFile!!)
-            }
-            
-            Log.d("TalkToMeAudio", "Recording stopped.")
-            outputFile
-        } catch (e: Exception) {
-            Log.e("TalkToMeAudio", "Failed to stop recording", e)
-            audioRecord?.release()
-            null
-        } finally {
-            audioRecord = null
-        }
+        /** Bytes of PCM per second: 16000 samples * 2 bytes. */
+        private const val BYTES_PER_SECOND = SAMPLE_RATE * 2L
+
+        /** Clips shorter than this are almost always accidental taps. */
+        fun isTooShort(file: File, minMillis: Long = 400): Boolean =
+            (file.length() - WAV_HEADER_SIZE) * 1000 / BYTES_PER_SECOND < minMillis
     }
 }

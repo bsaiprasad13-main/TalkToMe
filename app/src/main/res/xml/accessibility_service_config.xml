@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  typeWindowsChanged is the event Android sends when the keyboard window appears or disappears;
+  it requires flagRetrieveInteractiveWindows. Focus/selection events catch moving between fields.
+  typeWindowContentChanged is intentionally NOT subscribed: it fires constantly in chat apps.
+-->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowContentChanged|typeViewFocused|typeWindowStateChanged"
+    android:accessibilityEventTypes="typeWindowsChanged|typeWindowStateChanged|typeViewFocused|typeViewClicked|typeViewTextSelectionChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
+    android:notificationTimeout="50"
+    android:settingsActivity="com.saiprasad.talktome.MainActivity"
     android:description="@string/accessibility_service_description" />

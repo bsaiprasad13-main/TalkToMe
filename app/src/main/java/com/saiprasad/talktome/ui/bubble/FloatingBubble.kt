@@ -1,15 +1,32 @@
 package com.saiprasad.talktome.ui.bubble
 
-import android.view.WindowManager
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -17,181 +34,135 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
-import com.saiprasad.talktome.audio.TalkToMeAudioRecorder
-import com.saiprasad.talktome.service.FocusEventBus
-import kotlinx.coroutines.launch
-import java.io.File
-import kotlin.math.roundToInt
+import com.saiprasad.talktome.service.BubblePhase
 
+internal const val BUBBLE_SIZE_DP = 56
+private const val RECORDING_WIDTH_DP = 200
+
+/**
+ * The floating mic pill (Wispr Flow style). Purely presentational: the window position lives in
+ * [BubbleOverlay] and dictation state in DictationController.
+ */
 @Composable
 fun FloatingBubble(
-    audioRecorder: TalkToMeAudioRecorder,
-    windowManager: WindowManager,
-    layoutParams: WindowManager.LayoutParams,
-    composeView: ComposeView,
-    onAudioRecorded: suspend (File?) -> Unit
+    visible: Boolean,
+    phase: BubblePhase,
+    onMicTap: () -> Unit,
+    onCancel: () -> Unit,
+    onAccept: () -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (dx: Float, dy: Float) -> Unit,
+    onDragEnd: () -> Unit,
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    var isRecording by remember { mutableStateOf(false) }
-    var isTranslating by remember { mutableStateOf(false) }
-    val isFocused by FocusEventBus.isEditableFocused.collectAsState()
-    val isEnabled by FocusEventBus.isBubbleEnabled.collectAsState()
-    val isVisible = isFocused && isEnabled
-    
-    val screenWidth = LocalContext.current.resources.displayMetrics.widthPixels
-    
-    var offsetX by remember { mutableFloatStateOf(layoutParams.x.toFloat()) }
-    var offsetY by remember { mutableFloatStateOf(layoutParams.y.toFloat()) }
-    
-    val isOnRightSide by derivedStateOf { offsetX > (screenWidth / 2) }
-    var rowWidthPx by remember { mutableIntStateOf(0) }
-    var isDragging by remember { mutableStateOf(false) }
+    val view = LocalView.current
+    val isRecording = phase == BubblePhase.RECORDING
 
-    LaunchedEffect(rowWidthPx) {
-        if (isOnRightSide && !isDragging) {
-            offsetX = (screenWidth - rowWidthPx).toFloat()
-            layoutParams.x = offsetX.roundToInt()
-            windowManager.updateViewLayout(composeView, layoutParams)
-        }
-    }
+    // pointerInput(Unit) captures lambdas once; keep them fresh.
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
 
-    // Dynamic width for the pill
-    val targetWidth = if (isRecording) 220.dp else 60.dp
     val animatedWidth by animateDpAsState(
-        targetValue = targetWidth,
+        targetValue = if (isRecording) RECORDING_WIDTH_DP.dp else BUBBLE_SIZE_DP.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "pillWidth"
+        label = "pillWidth",
+    )
+    val animatedColor by animateColorAsState(
+        targetValue = if (isRecording) Color(0xFFE5E7EB) else Color(0xFF2563EB), // Light Gray or Blue
+        label = "pillColor",
     )
 
-    // Dynamic background color
-    val targetColor = if (isRecording) Color(0xFFE5E7EB) else Color(0xFF2563EB) // Light Gray or Blue
-    val animatedColor by animateColorAsState(targetValue = targetColor, label = "pillColor")
-
     AnimatedVisibility(
-        visible = isVisible || isRecording || isTranslating,
-        enter = fadeIn(),
-        exit = fadeOut()
+        visible = visible,
+        enter = fadeIn() + scaleIn(initialScale = 0.7f),
+        exit = fadeOut() + scaleOut(targetScale = 0.7f),
     ) {
         Box(
             modifier = Modifier
-                .wrapContentSize()
-                .onSizeChanged { rowWidthPx = it.width }
+                .padding(4.dp) // room for the shadow
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { isDragging = true },
-                        onDragEnd = {
-                            isDragging = false
-                            val targetX = if (offsetX > screenWidth / 2) (screenWidth - rowWidthPx).toFloat() else 0f
-                            coroutineScope.launch {
-                                Animatable(offsetX).animateTo(
-                                    targetValue = targetX,
-                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                                ) {
-                                    offsetX = value
-                                    layoutParams.x = offsetX.roundToInt()
-                                    windowManager.updateViewLayout(composeView, layoutParams)
-                                }
-                            }
-                        },
+                        onDragStart = { currentOnDragStart() },
+                        onDragEnd = { currentOnDragEnd() },
+                        onDragCancel = { currentOnDragEnd() },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            offsetX += dragAmount.x
-                            offsetY += dragAmount.y
-                            
-                            layoutParams.x = offsetX.roundToInt()
-                            layoutParams.y = offsetY.roundToInt()
-                            windowManager.updateViewLayout(composeView, layoutParams)
-                        }
+                            currentOnDrag(dragAmount.x, dragAmount.y)
+                        },
                     )
-                }
+                },
         ) {
-            // The Morphing Pill
+            // The morphing pill
             Box(
                 modifier = Modifier
                     .width(animatedWidth)
-                    .height(60.dp)
+                    .height(BUBBLE_SIZE_DP.dp)
+                    .shadow(6.dp, CircleShape)
                     .clip(CircleShape)
                     .background(animatedColor)
-                    .clickable(enabled = !isRecording && !isTranslating) {
-                        // Start recording
-                        isRecording = true
-                        audioRecorder.startRecording { file ->
-                            isRecording = false
-                            isTranslating = true
-                            coroutineScope.launch {
-                                onAudioRecorded(file)
-                                isTranslating = false
-                            }
-                        }
+                    .clickable(enabled = phase == BubblePhase.IDLE) {
+                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        onMicTap()
                     },
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
-                if (isTranslating) {
-                    CircularProgressIndicator(
+                when (phase) {
+                    BubblePhase.TRANSCRIBING -> CircularProgressIndicator(
                         color = Color.White,
-                        modifier = Modifier.size(30.dp),
-                        strokeWidth = 3.dp
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 3.dp,
                     )
-                } else if (!isRecording) {
-                    Icon(
+                    BubblePhase.IDLE -> Icon(
                         imageVector = Icons.Default.Mic,
-                        contentDescription = "Mic",
-                        tint = Color.White
+                        contentDescription = "Start dictation",
+                        tint = Color.White,
                     )
-                } else {
-                    // Recording State UI (Wispr Flow style)
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                    BubblePhase.RECORDING -> Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // Reject Button
+                        // Reject
                         Box(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFD1D5DB)) // Darker Gray
                                 .clickable {
-                                    val file = audioRecorder.stopRecording()
-                                    file?.delete()
-                                    isRecording = false
+                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                    onCancel()
                                 },
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
                         ) {
                             Icon(imageVector = Icons.Default.Close, contentDescription = "Cancel", tint = Color.Black)
                         }
-                        
-                        // Waveform Animation (Simulated)
+
                         AnimatedWaveform()
-                        
-                        // Accept Button
+
+                        // Accept
                         Box(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF5A55D6)) // Wispr Purple/Blue
                                 .clickable {
-                                    val file = audioRecorder.stopRecording()
-                                    isRecording = false
-                                    isTranslating = true
-                                    coroutineScope.launch {
-                                        onAudioRecorded(file)
-                                        isTranslating = false
-                                    }
+                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                    onAccept()
                                 },
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Icon(imageVector = Icons.Default.Check, contentDescription = "Accept", tint = Color.White)
+                            Icon(imageVector = Icons.Default.Check, contentDescription = "Insert text", tint = Color.White)
                         }
                     }
                 }
@@ -203,10 +174,10 @@ fun FloatingBubble(
 @Composable
 fun AnimatedWaveform() {
     val infiniteTransition = rememberInfiniteTransition(label = "wave")
-    
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         for (i in 0 until 5) {
             val height by infiniteTransition.animateFloat(
@@ -214,17 +185,17 @@ fun AnimatedWaveform() {
                 targetValue = 24f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(durationMillis = 500, delayMillis = i * 100, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
+                    repeatMode = RepeatMode.Reverse,
                 ),
-                label = "barHeight"
+                label = "barHeight",
             )
-            
+
             Box(
                 modifier = Modifier
                     .width(4.dp)
                     .height(height.dp)
                     .clip(CircleShape)
-                    .background(Color.Gray)
+                    .background(Color.Gray),
             )
         }
     }
