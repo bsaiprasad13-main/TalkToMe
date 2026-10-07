@@ -3,11 +3,13 @@
   typeWindowsChanged is the event Android sends when the keyboard window appears or disappears;
   it requires flagRetrieveInteractiveWindows. Focus/selection events catch moving between fields.
   typeWindowContentChanged is intentionally NOT subscribed: it fires constantly in chat apps.
+  flagInputMethodEditor (Android 13+) gives the service its own input connection to the focused
+  field, so dictated text is typed like a keyboard would, never mixed with placeholder text.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowsChanged|typeWindowStateChanged|typeViewFocused|typeViewClicked|typeViewTextSelectionChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagInputMethodEditor"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="50"
     android:settingsActivity="com.saiprasad.talktome.MainActivity"

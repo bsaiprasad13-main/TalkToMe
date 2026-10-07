@@ -4,20 +4,24 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.annotation.RequiresApi
 
 /**
  * Inserts dictated text into the focused text field of another app.
  *
  * Order of attempts:
- * 1. ACTION_SET_TEXT, inserting at the cursor (keeps what the user already typed, no clipboard).
- * 2. ACTION_PASTE, then restoring the user's previous clipboard when we could read it.
- * 3. Copy to the clipboard so the words are never lost.
+ * 1. Android 13+: commit through the accessibility input connection, exactly like a keyboard
+ *    typing at the cursor. Never sees placeholder text like WhatsApp's "Message".
+ * 2. ACTION_SET_TEXT, inserting at the cursor (keeps what the user already typed, no clipboard).
+ * 3. ACTION_PASTE, then restoring the user's previous clipboard when we could read it.
+ * 4. Copy to the clipboard so the words are never lost.
  */
 object TextInjector {
     private const val TAG = "TalkToMeInjector"
@@ -58,6 +62,10 @@ object TextInjector {
      *   can't be found any more (e.g. the app briefly re-laid out while we were transcribing).
      */
     fun inject(service: AccessibilityService, text: String, fallbackNode: AccessibilityNodeInfo?): Result {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && commitWithInputConnection(service, text)) {
+            return Result.INSERTED
+        }
+
         val node = findFocusedEditable(service)
             ?: fallbackNode?.takeIf { it.refresh() && it.isEditable }
 
@@ -74,6 +82,36 @@ object TextInjector {
                 copyToClipboard(service, text)
                 Result.COPIED_TO_CLIPBOARD
             }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun commitWithInputConnection(service: AccessibilityService, text: String): Boolean {
+        return try {
+            val inputMethod = service.inputMethod ?: return false
+            if (!inputMethod.currentInputStarted) return false
+            val connection = inputMethod.currentInputConnection ?: return false
+
+            // Synchronous call: proves the connection is live, and gives the real characters
+            // around the cursor (placeholder text is not part of the editor's content).
+            val surrounding = connection.getSurroundingText(1, 1, 0) ?: return false
+            val chars = surrounding.text
+            val start = surrounding.selectionStart
+            val end = surrounding.selectionEnd
+            val charBefore = if (start in 1..chars.length) chars[start - 1] else null
+            val charAfter = if (end in 0 until chars.length) chars[end] else null
+
+            val insertion = buildString {
+                if (charBefore != null && !charBefore.isWhitespace()) append(' ')
+                append(text)
+                if (charAfter != null && !charAfter.isWhitespace()) append(' ')
+            }
+            connection.commitText(insertion, 1, null)
+            Log.d(TAG, "Inserted text via accessibility input connection")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Input connection insert failed", e)
+            false
         }
     }
 
@@ -116,12 +154,16 @@ object TextInjector {
         }
     }
 
-    /** The field's real text, ignoring placeholder/hint text that empty fields report. */
+    /**
+     * The field's real text, ignoring placeholder text that empty fields report. Some apps
+     * (e.g. WhatsApp's "Message" box) report the placeholder as the text without flagging it.
+     */
     private fun currentText(node: AccessibilityNodeInfo): String {
         if (node.isShowingHintText) return ""
         val text = node.text?.toString() ?: return ""
-        val hint = node.hintText?.toString()
-        if (hint != null && text == hint && node.textSelectionStart <= 0) return ""
+        val cursorAtStart = node.textSelectionStart <= 0 && node.textSelectionEnd <= 0
+        val placeholders = listOfNotNull(node.hintText?.toString(), node.contentDescription?.toString())
+        if (cursorAtStart && placeholders.any { it == text }) return ""
         return text
     }
 
