@@ -47,11 +47,16 @@ TalkToMe isn't a competing product to Kivi. It's a small, personal solution to a
 ---
 
 ## 🚀 Features
-- **Context-Aware Floating UI (Wispr Flow Clone):** The microphone bubble is completely invisible until you actually need it. It appears docked to the screen edge just above the keyboard the moment a soft keyboard opens, and hides when it closes. Like Wispr Flow, it stays out of password, PIN, number and phone fields, and remembers the edge and height you drag it to.
-- **Smart Audio Encoding:** Bypasses Android's standard compressed formats to capture raw 16-bit PCM audio, manually constructing a standard `.wav` header. This ensures strict API compliance with backend AI systems (like Sarvam).
-- **Accessibility Text Injection:** Uses Android's `AccessibilityService` to find the focused text field and insert the text at your cursor, keeping anything you already typed. If a field doesn't support that it pastes instead, and if there is no field at all the text is copied to your clipboard so it's never lost.
-- **Micro-interactions & UX:** Features an animated pulsing wave while recording, a smooth horizontal expansion to reveal Accept/Reject buttons, and a loading spinner for instant network feedback.
-- **Local History Vault:** Offline-first architecture saves your last 10 successful transcriptions locally using `SharedPreferences`, accessible via the sleek Home Screen.
+- **Context-Aware Floating Bubble (Wispr Flow style):** The microphone bubble is invisible until you need it. It appears docked to the screen edge just above the keyboard the moment a keyboard opens, and hides when it closes. Like Wispr Flow, it stays out of password, PIN, number and phone fields.
+- **Drag & Remember:** Drag the bubble anywhere; it snaps to the nearest edge and remembers the side and height you chose, while never covering the keys.
+- **On/Off Switch:** Turn the floating bubble off from the app's home screen whenever you don't want it, and back on when you do. The change takes effect instantly and is remembered across restarts.
+- **Keyboard-Style Typing:** On Android 13+ your words are typed through the accessibility input connection, exactly like a keyboard typing at your cursor. Anything you already typed is kept, and placeholder text such as WhatsApp's grey "Message" never sneaks into the result. Older phones fall back to inserting at the cursor, then pasting, and finally copying to the clipboard so your words are never lost.
+- **Smart Audio Encoding:** Captures raw 16 kHz, 16-bit PCM and writes a standard `.wav` header, exactly what Sarvam's API expects. Recordings stop automatically just before Sarvam's 30-second limit.
+- **Self-Diagnosing Home Screen:** Shows whether TalkToMe is ready, warns if Android has stopped the accessibility service (with a one-tap fix), and prompts for an unrestricted battery setting so the bubble keeps working in the background.
+- **Clear Feedback:** Friendly messages for a busy microphone, accidental short taps, "didn't catch that", no internet, or an invalid API key instead of silent failures.
+- **Privacy-Minded:** No "Display over other apps" permission needed. The microphone is only used while you are dictating, with a "Listening…" notification shown only during that time.
+- **Micro-interactions & UX:** Animated waveform while recording, a smooth expansion to reveal Cancel/Insert buttons, haptic taps, and a loading spinner while Sarvam processes your voice.
+- **Local History Vault:** Your last 10 transcriptions are saved on your phone and appear instantly on the home screen; tap one to copy it again.
 
 ---
 
@@ -80,18 +85,22 @@ TalkToMe is designed to be completely invisible until you need to type something
 
 **Example Workflow:**
 1. **Open an App:** You open WhatsApp (or Telegram, Chrome, etc.) and tap on the text box.
-2. **Keyboard Appears:** Your standard Android keyboard (like Gboard) slides up. TalkToMe detects the keyboard and magically reveals a small floating microphone bubble on the edge of your screen.
-3. **Record:** You tap the bubble and speak (e.g., *"Bhojanam chesava?"*). The bubble pulses to show it is listening.
-4. **Process:** Tap the stop button. A loading spinner appears while Sarvam AI processes and transliterates your voice in real-time.
-5. **Confirm & Inject:** The bubble expands to show `[ ✔ ]` and `[ X ]`. When you tap `✔`, the transliterated text (*"Bhojanam chesava?"*) is instantly typed into the WhatsApp text box without you touching the keyboard!
-6. **Vanish:** You press the back button or send the message, the keyboard disappears, and the floating bubble instantly vanishes out of your way.
+2. **Keyboard Appears:** Your normal keyboard (like Gboard) slides up, and TalkToMe's blue mic bubble appears on the edge of the screen, just above the keyboard.
+3. **Record:** Tap the mic and speak (e.g., *"Bhojanam chesava?"*). The bubble expands into a pill with `[ ✕ ]`, a moving waveform, and `[ ✔ ]`.
+4. **Insert or Cancel:** Tap `✔` when you're done speaking (or `✕` to throw the recording away). A spinner shows while Sarvam AI transliterates your voice.
+5. **Done:** The text (*"Bhojanam chesava?"*) is typed into the WhatsApp box at your cursor, ready for you to review and send. TalkToMe never sends messages for you.
+6. **Vanish:** Send the message or press back; when the keyboard closes, the bubble disappears out of your way.
+
+> 💡 **Tip:** Don't want the bubble for a while? Open TalkToMe and flip the **Floating bubble** switch off. Flip it back on whenever you want it.
 
 ---
 ## 🛠️ How it Works (Under the Hood)
 1. **Keyboard detection:** `TalkToMeAccessibilityService` listens for `TYPE_WINDOWS_CHANGED` (sent when the keyboard window appears or disappears) plus focus events, and checks for a window of type `TYPE_INPUT_METHOD` to get the keyboard's position.
 2. **Floating bubble:** The accessibility service draws the bubble itself (`BubbleOverlay`) as a `TYPE_ACCESSIBILITY_OVERLAY` window rendered with Jetpack Compose. That window sits above the keyboard, needs no "Display over other apps" permission, and lives exactly as long as the accessibility service, so there is no separate background service for Android to kill.
 3. **Custom Audio Pipeline:** When you tap the mic, a custom `AudioRecord` implementation streams raw 16 kHz PCM to a temporary file and adds a 44-byte WAVE header when you stop. A short-lived `RecordingService` shows a "Listening…" notification only while you dictate.
-4. **Network & Injection:** The `.wav` goes to Sarvam's API via `Retrofit`/`OkHttp`. The transcript is inserted at the cursor with `ACTION_SET_TEXT` (falling back to `ACTION_PASTE`, then the clipboard).
+4. **Network:** The `.wav` goes to Sarvam's `speech-to-text` API (`saaras:v4`, `translit` mode, `te-IN`) via `Retrofit`/`OkHttp`.
+5. **Typing the text:** On Android 13+ the service uses its own accessibility input connection (`flagInputMethodEditor` + `commitText`) to type at the cursor like a keyboard. Otherwise it inserts with `ACTION_SET_TEXT`, then falls back to `ACTION_PASTE`, then the clipboard.
+6. **Settings & state:** `SettingsRepository` (bubble on/off, docked side and height) and `HistoryRepository` are shared, process-wide singletons, so the home screen and the bubble always agree instantly.
 
 ---
 
@@ -100,7 +109,7 @@ To install this on your personal Android device, you'll need a computer and a US
 
 ### Prerequisites
 1. Download and install **[Android Studio](https://developer.android.com/studio)**.
-2. Enable **Developer Options** and **USB Debugging** on your Android phone.
+2. An Android phone running **Android 8.0 or newer** (Android 13+ recommended for the best typing), with **Developer Options** and **USB Debugging** enabled.
 3. Obtain a Sarvam AI API Key (from the Sarvam dashboard).
 
 ### Setup Instructions
@@ -122,6 +131,24 @@ To install this on your personal Android device, you'll need a computer and a US
    Recommended: tap **Allow** on the "Keep TalkToMe running" card to give it unrestricted battery use (on Xiaomi/Oppo/Vivo also enable Autostart).
 
    If the Accessibility toggle is greyed out with "Restricted setting" (Android 13+ when the APK is sideloaded), open **App info → ⋮ → Allow restricted settings**, then turn it on.
+8. Open TalkToMe. The top card should say **Ready**. Tap any text box in WhatsApp and the mic appears above your keyboard.
+
+> 🔄 **Updating an existing install?** After installing a new version, turn TalkToMe off and back on once in **Settings → Accessibility** so Android picks up the latest service settings.
+
+### 🩺 Troubleshooting
+| Problem | What to do |
+| :--- | :--- |
+| Bubble doesn't appear | Check that the **Floating bubble** switch is on and the top card says **Ready**. Make sure you're in a normal text box (the bubble hides in password and number fields). |
+| Home screen says "Service isn't running" | Tap **Open Accessibility settings**, turn TalkToMe off and back on. |
+| Bubble stops working after a while | Tap **Allow** on the "Keep TalkToMe running" card. On Samsung set battery to **Unrestricted**; on Xiaomi/Oppo/Vivo also enable **Autostart**. |
+| Text takes a long time to appear | Almost always the network or Sarvam's servers, not the app. Try Wi-Fi or try again shortly. |
+| "Sarvam rejected the API key" | Check `SARVAM_API_KEY` in `local.properties`, then rebuild and reinstall. |
+| "Couldn't type into this box" | Some apps block typing from accessibility services. The text is on your clipboard; long-press the box and paste. |
+
+### 🤝 Sharing TalkToMe
+Share this GitHub repository and have each person build the app with **their own** free Sarvam key in their own `local.properties`.
+
+> ⚠️ **Don't send anyone an APK you built yourself.** Your API key is compiled into your build, so anyone with your APK could extract it and use your Sarvam credits.
 
 ### 🤖 Troubleshooting with AI IDEs
 Deploying Android apps can sometimes result in environment issues (like Gradle version mismatches, Java SDK errors, or manifest conflicts). 
